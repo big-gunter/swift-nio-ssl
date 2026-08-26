@@ -832,6 +832,24 @@ extension NIOSSLHandler {
     public var peerValidatedCertificateChain: ValidatedCertificateChain? {
         self.connection.customVerificationManager?.verificationMetadata?.validatedCertificateChain
     }
+
+    /// Exports a connection-specific secret from this connection, as specified in RFC 5705
+    /// ("Keying Material Exporters for Transport Layer Security (TLS)"). Must only be called
+    /// once the handshake has completed; this **is not thread-safe**, matching ``tlsVersion``
+    /// and ``peerCertificate`` above -- call it from the correct event loop thread.
+    ///
+    /// - Parameters:
+    ///   - label: The disambiguating label string defined by the calling protocol's own RFC
+    ///     5705 registration.
+    ///   - context: An optional, protocol-defined context value. Per RFC 5705, `nil` is *not*
+    ///     equivalent to an empty array on connections negotiated below TLS 1.3 -- the two
+    ///     produce different output.
+    ///   - numberOfBytes: The number of bytes of keying material to export.
+    /// - Throws: ``NIOSSLExtraError/keyingMaterialExportFailed`` if the underlying BoringSSL
+    ///   call fails, most commonly because the handshake hasn't completed yet.
+    public func exportKeyingMaterial(label: [UInt8], context: [UInt8]?, numberOfBytes: Int) throws -> [UInt8] {
+        try self.connection.exportKeyingMaterial(label: label, context: context, numberOfBytes: numberOfBytes)
+    }
 }
 
 extension Channel {
@@ -855,6 +873,15 @@ extension Channel {
             $0.peerValidatedCertificateChain
         }
     }
+
+    /// API to export RFC 5705 keying material off the `Channel`. See ``NIOSSLHandler/exportKeyingMaterial(label:context:numberOfBytes:)``.
+    public func nioSSL_exportKeyingMaterial(
+        label: [UInt8], context: [UInt8]?, numberOfBytes: Int
+    ) -> EventLoopFuture<[UInt8]> {
+        self.pipeline.handler(type: NIOSSLHandler.self).flatMapThrowing {
+            try $0.exportKeyingMaterial(label: label, context: context, numberOfBytes: numberOfBytes)
+        }
+    }
 }
 
 extension ChannelPipeline.SynchronousOperations {
@@ -874,6 +901,13 @@ extension ChannelPipeline.SynchronousOperations {
     public func nioSSL_peerValidatedCertificateChain() throws -> ValidatedCertificateChain? {
         let handler = try self.handler(type: NIOSSLHandler.self)
         return handler.peerValidatedCertificateChain
+    }
+
+    /// API to export RFC 5705 keying material directly from the `ChannelPipeline`. See
+    /// ``NIOSSLHandler/exportKeyingMaterial(label:context:numberOfBytes:)``.
+    public func nioSSL_exportKeyingMaterial(label: [UInt8], context: [UInt8]?, numberOfBytes: Int) throws -> [UInt8] {
+        let handler = try self.handler(type: NIOSSLHandler.self)
+        return try handler.exportKeyingMaterial(label: label, context: context, numberOfBytes: numberOfBytes)
     }
 }
 

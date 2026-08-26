@@ -406,6 +406,55 @@ internal final class SSLConnection {
         return NIOSSLCertificate.fromUnsafePointer(takingOwnership: certPtr)
     }
 
+    /// Exports a connection-specific secret from this connection, as specified in RFC 5705. Must
+    /// only be called once the handshake has completed.
+    ///
+    /// - Parameters:
+    ///   - label: The disambiguating label string, as defined by the RFC 5705 registry for the
+    ///     calling protocol.
+    ///   - context: An optional, protocol-defined context value. Per RFC 5705, providing `nil`
+    ///     here is *not* equivalent to providing an empty array on connections negotiated below
+    ///     TLS 1.3: the two produce different output.
+    ///   - numberOfBytes: The number of bytes of keying material to export.
+    func exportKeyingMaterial(label: [UInt8], context: [UInt8]?, numberOfBytes: Int) throws -> [UInt8] {
+        guard numberOfBytes > 0 else {
+            return []
+        }
+
+        var output = [UInt8](repeating: 0, count: numberOfBytes)
+        let rc: CInt = output.withUnsafeMutableBufferPointer { outputPtr in
+            label.withUnsafeBufferPointer { labelPtr -> CInt in
+                let labelBase = labelPtr.baseAddress.map {
+                    UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)
+                }
+                if let context {
+                    return context.withUnsafeBufferPointer { contextPtr in
+                        CNIOBoringSSL_SSL_export_keying_material(
+                            self.ssl,
+                            outputPtr.baseAddress, outputPtr.count,
+                            labelBase, labelPtr.count,
+                            contextPtr.baseAddress, contextPtr.count,
+                            1
+                        )
+                    }
+                } else {
+                    return CNIOBoringSSL_SSL_export_keying_material(
+                        self.ssl,
+                        outputPtr.baseAddress, outputPtr.count,
+                        labelBase, labelPtr.count,
+                        nil, 0,
+                        0
+                    )
+                }
+            }
+        }
+
+        guard rc == 1 else {
+            throw NIOSSLExtraError.keyingMaterialExportFailed
+        }
+        return output
+    }
+
     /// Drops persistent connection state.
     ///
     /// Must only be called when the connection is no longer needed. The rest of this object

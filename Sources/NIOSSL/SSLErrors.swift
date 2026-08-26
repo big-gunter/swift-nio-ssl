@@ -199,6 +199,7 @@ extension NIOSSLExtraError {
         case invalidSNIHostname
         case unknownPrivateKeyFileType
         case noForwardProgress
+        case keyingMaterialExportFailed
     }
 }
 
@@ -240,6 +241,14 @@ extension NIOSSLExtraError {
     /// This can happen when the `NIOSSLHandler` is unbuffering actions and gets into a state where
     /// it would potentially spin loop indefinitely.
     static let noForwardProgress = NIOSSLExtraError(baseError: .noForwardProgress, description: nil)
+
+    /// BoringSSL's `SSL_export_keying_material` call failed. This can happen if the handshake has
+    /// not yet completed, or if TLS 1.3 early exporters are requested before the handshake reaches
+    /// the point where they're available.
+    public static let keyingMaterialExportFailed = NIOSSLExtraError(
+        baseError: .keyingMaterialExportFailed,
+        description: nil
+    )
 
     @inline(never)
     internal static func failedToValidateHostname(expectedName: String) -> NIOSSLExtraError {
