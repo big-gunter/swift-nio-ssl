@@ -450,7 +450,7 @@ internal final class SSLConnection {
         }
 
         guard rc == 1 else {
-            throw NIOSSLExtraError.keyingMaterialExportFailed
+            throw NIOSSLExtraError.keyingMaterialExportFailed(errorStack: BoringSSLError.buildErrorStack())
         }
         return output
     }

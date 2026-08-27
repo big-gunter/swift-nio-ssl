@@ -251,6 +251,15 @@ extension NIOSSLExtraError {
     )
 
     @inline(never)
+    internal static func keyingMaterialExportFailed(errorStack: NIOBoringSSLErrorStack) -> NIOSSLExtraError {
+        let description =
+            errorStack.isEmpty
+            ? "SSL_export_keying_material returned failure with an empty BoringSSL error queue"
+            : errorStack.map(\.description).joined(separator: "; ")
+        return NIOSSLExtraError(baseError: .keyingMaterialExportFailed, description: description)
+    }
+
+    @inline(never)
     internal static func failedToValidateHostname(expectedName: String) -> NIOSSLExtraError {
         let description = "Couldn't find \(expectedName) in certificate from peer"
         return NIOSSLExtraError(baseError: .failedToValidateHostname, description: description)
